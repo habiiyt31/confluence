@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-ink-border;
+  }
+  body {
+    background-image: radial-gradient(
+      circle at 12% -10%,
+      rgba(124, 108, 240, 0.10),
+      transparent 42%
+    );
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: rgba(124, 108, 240, 0.35);
+  }
+  :focus-visible {
+    outline: 2px solid #7c6cf0;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-ink-border bg-ink-surface p-5 sm:p-6;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-synth text-white hover:bg-synth/90;
+  }
+  .btn-secondary {
+    @apply btn border border-ink-border bg-ink-raised text-paper hover:border-paper-faint;
+  }
+  .btn-ghost {
+    @apply btn text-paper-muted hover:text-paper;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-paper-muted;
+  }
+  .field-input {
+    @apply w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-sm text-paper placeholder:text-paper-faint focus:border-synth focus:outline-none;
+  }
+  .field-textarea {
+    @apply field-input min-h-[110px] resize-y;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-ink-border bg-ink-raised px-2.5 py-1 text-xs text-paper-muted;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
