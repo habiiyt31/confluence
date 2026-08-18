@@ -73,8 +73,15 @@ export function currentDay(): number {
  * after an action), so without a retry here, that same class of
  * hiccup that writeContractWithRetry already handles below would show
  * up constantly as a full-page error requiring a manual reload.
+ *
+ * This gets hit hardest right after a write: waitForTransactionReceipt
+ * already polls the RPC repeatedly to confirm ACCEPTED, and the moment
+ * that resolves, the UI immediately fires 2-3 more read requests in
+ * parallel to refresh -- exactly when the RPC has the least room to
+ * spare. 5 attempts with a longer, growing backoff gives it more room
+ * to recover than the original 3-attempt/600ms version did.
  */
-async function withReadRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+async function withReadRetry<T>(fn: () => Promise<T>, maxAttempts = 5): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
@@ -82,7 +89,7 @@ async function withReadRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<
       const message = String(err?.message ?? err);
       const looksTransient = /failed to fetch|network|timeout|fetch failed/i.test(message);
       if (!looksTransient || attempt === maxAttempts) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
     }
   }
   throw new Error("Could not reach the contract after multiple attempts.");
@@ -230,6 +237,15 @@ async function writeAndWait(
       interval: 3000,
     });
     logActivity({ hash, functionName, args, status: "finalized", timestamp: Date.now() });
+    // Small deliberate pause before the caller refreshes the UI.
+    // waitForTransactionReceipt just finished polling the RPC
+    // repeatedly to confirm ACCEPTED; firing 2-3 more read requests at
+    // it in the same instant the polling stops is exactly when
+    // Studionet's shared RPC has been observed dropping requests
+    // ("Failed to fetch"). withReadRetry in this file already absorbs
+    // that if it happens, but giving the RPC a moment here means the
+    // very first read attempt is more likely to just succeed.
+    await new Promise((resolve) => setTimeout(resolve, 1200));
     return { hash, receipt };
   } catch (err: any) {
     // Consensus can take longer than our wait window even though the
