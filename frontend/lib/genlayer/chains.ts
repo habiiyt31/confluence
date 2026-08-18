@@ -73,5 +73,22 @@ export const ACTIVE_NETWORK: NetworkKey =
 export const ACTIVE_CHAIN = GENLAYER_CHAINS[ACTIVE_NETWORK];
 export const ACTIVE_ADD_CHAIN_PARAMS = ADD_CHAIN_PARAMS[ACTIVE_NETWORK];
 
-export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
-  "") as `0x${string}`;
+// .trim() matters more than it looks — a trailing newline or space from
+// copy-pasting an address into .env.local is invisible in most editors,
+// but it turns a valid 42-char address into a string the RPC node
+// rejects outright with "Missing or invalid parameters" before your
+// contract code ever runs. See lib/genlayer/contract.ts#assertContractConfigured.
+//
+// .toLowerCase() matters even more: the GenLayer Studio RPC has been
+// observed rejecting EIP-55 checksummed (mixed-case) addresses with the
+// exact same "Missing or invalid parameters" / -32602 error, for both
+// the `to` (contract) and `from` (sender) fields of a gen_call. A
+// properly checksummed address like the one `genlayer deploy` or a
+// wallet prints is still perfectly valid — the RPC is just stricter
+// than standard Ethereum JSON-RPC nodes about accepting it. Lowercase
+// hex is unambiguous and universally accepted, so normalize here once
+// rather than trusting every call site to remember.
+export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "")
+  .trim()
+  .toLowerCase() as `0x${string}` | "";
+

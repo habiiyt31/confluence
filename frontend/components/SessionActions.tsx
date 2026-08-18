@@ -1,27 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useWallet } from "@/lib/wallet/WalletProvider";
+import { useWallet } from "@/lib/useWallet";
 import {
   synthesize,
   requestResynthesis,
   claimReward,
   reclaimFunding,
   currentDay,
-} from "@/lib/genlayer/contract";
+} from "@/lib/contract";
 import { formatGEN } from "@/lib/format";
-import type { ContributionDTO, SessionDTO } from "@/lib/genlayer/contract";
+import type { Contribution, Session } from "@/lib/contract";
 
 export function SessionActions({
   session,
   contributions,
   onChanged,
 }: {
-  session: SessionDTO;
-  contributions: ContributionDTO[];
+  session: Session;
+  contributions: Contribution[];
   onChanged: () => void;
 }) {
-  const { client, address, reverifyChain } = useWallet();
+  const { address } = useWallet();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,19 +32,18 @@ export function SessionActions({
   );
 
   const windowPassed =
-    currentDay() > session.created_at_day + session.contribution_window_days;
-  const enoughContributions = session.contribution_count >= session.min_contributions;
+    currentDay() > session.createdAtDay + session.contributionWindowDays;
+  const enoughContributions = session.contributionCount >= session.minContributions;
   const canSynthesize =
     (session.status === "open" || session.status === "closed") &&
     (windowPassed || enoughContributions);
 
-  async function run(label: string, fn: () => Promise<unknown>) {
-    if (!client) return;
+  async function run(label: string, fn: (addr: `0x${string}`) => Promise<unknown>) {
+    if (!address) return;
     setBusy(label);
     setError(null);
     try {
-      await reverifyChain();
-      await fn();
+      await fn(address);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to ${label.toLowerCase()}`);
@@ -59,8 +58,8 @@ export function SessionActions({
     actions.push(
       <button
         key="synthesize"
-        onClick={() => run("Synthesize", () => synthesize(client!, session.id))}
-        disabled={!client || busy !== null}
+        onClick={() => run("Synthesize", (addr) => synthesize(addr, session.id))}
+        disabled={!address || busy !== null}
         className="btn-primary"
       >
         {busy === "Synthesize" ? "Synthesizing…" : "Run synthesis"}
@@ -71,14 +70,14 @@ export function SessionActions({
   if (
     session.status === "synthesized" &&
     isConvener &&
-    session.resynthesis_count < 1 &&
+    session.resynthesisCount < 1 &&
     !contributions.some((c) => c.claimed)
   ) {
     actions.push(
       <button
         key="resynth"
-        onClick={() => run("Request resynthesis", () => requestResynthesis(client!, session.id))}
-        disabled={!client || busy !== null}
+        onClick={() => run("Request resynthesis", (addr) => requestResynthesis(addr, session.id))}
+        disabled={!address || busy !== null}
         className="btn-secondary"
       >
         {busy === "Request resynthesis" ? "Requesting…" : "Request re-synthesis"}
@@ -91,14 +90,14 @@ export function SessionActions({
       <button
         key="claim"
         onClick={() =>
-          run("Claim reward", () => claimReward(client!, session.id, myContribution.index))
+          run("Claim reward", (addr) => claimReward(addr, session.id, myContribution.index))
         }
-        disabled={!client || busy !== null}
+        disabled={!address || busy !== null}
         className="btn-primary"
       >
         {busy === "Claim reward"
           ? "Claiming…"
-          : `Claim reward (${myContribution.attribution_bps / 100}% share)`}
+          : `Claim reward (${myContribution.attributionBps / 100}% share)`}
       </button>
     );
   }
@@ -111,17 +110,17 @@ export function SessionActions({
     );
   }
 
-  if (session.status === "failed" && isConvener && !session.funding_reclaimed) {
+  if (session.status === "failed" && isConvener && !session.fundingReclaimed) {
     actions.push(
       <button
         key="reclaim"
-        onClick={() => run("Reclaim funding", () => reclaimFunding(client!, session.id))}
-        disabled={!client || busy !== null}
+        onClick={() => run("Reclaim funding", (addr) => reclaimFunding(addr, session.id))}
+        disabled={!address || busy !== null}
         className="btn-secondary"
       >
         {busy === "Reclaim funding"
           ? "Reclaiming…"
-          : `Reclaim ${formatGEN(session.funding_amount)} GEN`}
+          : `Reclaim ${formatGEN(session.fundingAmount)} GEN`}
       </button>
     );
   }

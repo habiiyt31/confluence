@@ -1,7 +1,8 @@
 import { createClient } from "genlayer-js";
 import { TransactionStatus } from "genlayer-js/types";
 import type { GenLayerClient, CalldataEncodable } from "genlayer-js/types";
-import { ACTIVE_CHAIN, CONTRACT_ADDRESS } from "./chains";
+import { isAddress } from "viem";
+import { ACTIVE_CHAIN, ACTIVE_NETWORK, CONTRACT_ADDRESS } from "./chains";
 
 export type SessionStatus = "open" | "closed" | "synthesized" | "failed";
 
@@ -41,9 +42,33 @@ function publicClient(): GenLayerClient<any> {
 }
 
 function assertContractConfigured() {
-  if (!CONTRACT_ADDRESS) {
+  if (!CONTRACT_ADDRESS || !isAddress(CONTRACT_ADDRESS)) {
     throw new Error(
-      "NEXT_PUBLIC_CONTRACT_ADDRESS is not set — deploy the contract and add its address to .env.local"
+      `NEXT_PUBLIC_CONTRACT_ADDRESS ("${CONTRACT_ADDRESS}") isn't a valid deployed contract ` +
+        `address. Deploy contracts/confluence.py, then paste the printed address into ` +
+        `frontend/.env.local — check for stray quotes or a trailing space/newline from ` +
+        `copy-pasting.`
+    );
+  }
+}
+
+/**
+ * The GenLayer node rejects malformed gen_call/gen_call requests with a
+ * generic JSON-RPC "Missing or invalid parameters" error, before your
+ * contract code ever runs — that's a transport-level rejection, not a
+ * contract bug. Almost always means the contract address is wrong/not
+ * deployed on the configured network, or the RPC is unreachable. This
+ * wrapper turns that cryptic error into something actionable.
+ */
+async function withReadErrorContext<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Couldn't read from the contract at ${CONTRACT_ADDRESS} on ${ACTIVE_NETWORK}. ` +
+        `Check it's actually deployed on this network and the address in .env.local is ` +
+        `correct. (${message})`
     );
   }
 }
@@ -57,52 +82,62 @@ export function currentDay(): number {
 
 export async function getSessionCount(): Promise<number> {
   assertContractConfigured();
-  const result = await publicClient().readContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "get_session_count",
-    args: [],
+  return withReadErrorContext(async () => {
+    const result = await publicClient().readContract({
+      address: CONTRACT_ADDRESS as `0x${string}`,
+      functionName: "get_session_count",
+      args: [],
+    });
+    return Number(result);
   });
-  return Number(result);
 }
 
 export async function getSessions(offset: number, limit: number): Promise<SessionDTO[]> {
   assertContractConfigured();
-  const result = await publicClient().readContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "get_sessions",
-    args: [offset, limit],
+  return withReadErrorContext(async () => {
+    const result = await publicClient().readContract({
+      address: CONTRACT_ADDRESS as `0x${string}`,
+      functionName: "get_sessions",
+      args: [offset, limit],
+    });
+    return result as unknown as SessionDTO[];
   });
-  return result as unknown as SessionDTO[];
 }
 
 export async function getSession(sessionId: number): Promise<SessionDTO> {
   assertContractConfigured();
-  const result = await publicClient().readContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "get_session",
-    args: [sessionId],
+  return withReadErrorContext(async () => {
+    const result = await publicClient().readContract({
+      address: CONTRACT_ADDRESS as `0x${string}`,
+      functionName: "get_session",
+      args: [sessionId],
+    });
+    return result as unknown as SessionDTO;
   });
-  return result as unknown as SessionDTO;
 }
 
 export async function getSessionContributions(sessionId: number): Promise<ContributionDTO[]> {
   assertContractConfigured();
-  const result = await publicClient().readContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "get_session_contributions",
-    args: [sessionId],
+  return withReadErrorContext(async () => {
+    const result = await publicClient().readContract({
+      address: CONTRACT_ADDRESS as `0x${string}`,
+      functionName: "get_session_contributions",
+      args: [sessionId],
+    });
+    return result as unknown as ContributionDTO[];
   });
-  return result as unknown as ContributionDTO[];
 }
 
 export async function hasContributed(sessionId: number, address: string): Promise<boolean> {
   assertContractConfigured();
-  const result = await publicClient().readContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "has_contributed",
-    args: [sessionId, address],
+  return withReadErrorContext(async () => {
+    const result = await publicClient().readContract({
+      address: CONTRACT_ADDRESS as `0x${string}`,
+      functionName: "has_contributed",
+      args: [sessionId, address],
+    });
+    return Boolean(result);
   });
-  return Boolean(result);
 }
 
 // ==================== WRITES ====================
@@ -112,14 +147,48 @@ export async function hasContributed(sessionId: number, address: string): Promis
 
 type WriteClient = GenLayerClient<any>;
 
+/**
+ * Studionet is a shared, rate-limited RPC — genlayer-js's writeContract()
+ * calls eth_gasPrice/eth_estimateGas internally before it submits
+ * anything, and those specific calls have been observed getting
+ * rate-limited or dropped ("Failed to fetch") independently of whether
+ * the actual write would have gone through. writeContract has no
+ * gas/gasPrice override to skip that pre-flight step, so the fix is a
+ * retry at this layer instead — matching GenLayer's own docs' "Best
+ * Practices" backoff pattern. A failure here never reached the network
+ * (no hash was returned yet), so retrying the whole submission can't
+ * double-execute anything the way retrying an already-submitted
+ * transaction's wait step could.
+ */
+async function writeContractWithRetry(
+  client: WriteClient,
+  params: { address: `0x${string}`; functionName: string; args: CalldataEncodable[]; value: bigint },
+  maxAttempts = 3
+) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await client.writeContract(params);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const looksTransient =
+        /rate limit|failed to fetch|network|timeout|eth_gasPrice|eth_estimateGas/i.test(message);
+      const looksUserCaused = /user rejected|insufficient funds|denied/i.test(message);
+
+      if (looksUserCaused || !looksTransient || attempt === maxAttempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+  throw new Error("Could not submit the transaction after multiple attempts.");
+}
+
 async function writeAndWait(
   client: WriteClient,
   functionName: string,
   args: CalldataEncodable[],
   value?: bigint
 ) {
-  const hash = await client.writeContract({
-    address: CONTRACT_ADDRESS,
+  const hash = await writeContractWithRetry(client, {
+    address: CONTRACT_ADDRESS as `0x${string}`,
     functionName,
     args,
     value: value ?? BigInt(0),

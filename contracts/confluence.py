@@ -536,6 +536,8 @@ Respond ONLY as compact JSON, no markdown fences, exactly:
 
     @gl.public.view
     def get_session(self, session_id: u32) -> dict:
+        if int(session_id) >= int(self.next_session_id):
+            raise gl.vm.UserError("no session with this id")
         session = self.sessions[session_id]
         return {
             "id": int(session_id),
@@ -556,9 +558,20 @@ Respond ONLY as compact JSON, no markdown fences, exactly:
 
     @gl.public.view
     def get_sessions(self, offset: u32, limit: u32) -> list:
-        """Paginated session listing, newest first, for the homepage feed."""
+        """
+        Paginated session listing, newest first, for the homepage feed.
+
+        Guards against an empty contract explicitly: if no session has
+        ever been created, `next_session_id` is 0 and there is no
+        session at index 0 to read. Without this guard, a fresh
+        deployment's very first `get_sessions()` call would try to read
+        a TreeMap key that was never set and fail -- this bit a real
+        deploy before the guard was added, hence the comment.
+        """
         total = int(self.next_session_id)
-        start = max(0, total - 1 - int(offset))
+        if total == 0 or int(offset) >= total:
+            return []
+        start = total - 1 - int(offset)
         end = max(-1, start - int(limit))
         result = []
         i = start
@@ -581,6 +594,8 @@ Respond ONLY as compact JSON, no markdown fences, exactly:
 
     @gl.public.view
     def get_session_contributions(self, session_id: u32) -> list:
+        if int(session_id) >= int(self.next_session_id):
+            raise gl.vm.UserError("no session with this id")
         session = self.sessions[session_id]
         count = int(session.contribution_count)
         result = []

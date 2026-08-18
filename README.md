@@ -105,16 +105,22 @@ real money have independently corroborated — see
 confluence/
 ├── contracts/
 │   └── confluence.py       # The Intelligent Contract (non-upgradable)
-├── frontend/                 # Next.js 14 app (App Router, TypeScript, Tailwind)
+├── frontend/                 # Next.js 16 app (App Router, TypeScript, Tailwind)
 │   ├── app/
 │   │   ├── page.tsx                 # Session feed + convene form
 │   │   └── session/[id]/page.tsx    # Session detail: contribute, synthesize, claim
 │   ├── components/          # AttributionBar, SessionActions, ConnectButton, ...
 │   ├── lib/
-│   │   ├── genlayer/        # chains.ts, contract.ts — read/write wrappers
-│   │   ├── wallet/          # WalletProvider, EIP-6963 discovery, chain switching
+│   │   ├── genlayer.ts      # chain resolution, read/write clients, network switching
+│   │   ├── contract.ts      # typed read/write wrappers around every contract function
+│   │   ├── useWallet.ts     # plain hook — no context provider, matches a known-working
+│   │   │                    # reference project's architecture over this app's earlier,
+│   │   │                    # more complex EIP-6963-provider version
+│   │   ├── activityLog.ts   # localStorage-backed pending/finalized tx tracking
 │   │   └── format.ts
 │   └── .env.example
+├── genlayer.config.json     # Network definitions (Studionet, Localnet, Asimov, Bradbury)
+├── package.json             # Root convenience scripts: npm run network / lint / dev / build
 └── README.md
 ```
 
@@ -137,6 +143,16 @@ underlying rollup, different RPC endpoints). Switch by setting
 URL there is pulled straight from the `genlayer-js` package itself,
 not hand-typed.
 
+**Studionet's state is temporary, not persistent** — per GenLayer's own
+network comparison, Studionet resets periodically (Bradbury and Asimov
+don't). If reads that used to work suddenly all fail with a generic
+`"Missing or invalid parameters"` RPC error even though
+`NEXT_PUBLIC_CONTRACT_ADDRESS` is a well-formed address, that's almost
+always Studionet having reset since you deployed — the address is
+valid, there's just no contract code left at it anymore. Redeploy and
+paste the fresh address; if you want an address that survives across
+sessions, deploy to Bradbury or Asimov instead.
+
 ## Setup
 
 ```bash
@@ -148,17 +164,19 @@ py -3.12 -m pip install genvm-linter
 cd frontend && npm install && cd ..
 
 # 3. Network
-genlayer network   # choose studionet (fund via the 💧 faucet)
+npm run network   # choose studionet (fund via the 💧 faucet)
 
 # 4. Lint — non-upgradable, so this matters more than usual
-genvm-lint check contracts/confluence.py
+npm run lint
 
 # 5. Deploy directly from the CLI
 genlayer deploy --contract contracts/confluence.py
 
 # 6. Copy the printed contract address into frontend/.env.local
 cd frontend && cp .env.example .env.local
-# paste the address as NEXT_PUBLIC_CONTRACT_ADDRESS, then:
+# paste the address as NEXT_PUBLIC_CONTRACT_ADDRESS -- exactly as
+# printed, don't change its casing (see the address-casing section
+# below) -- then:
 npm run dev
 ```
 
@@ -175,19 +193,86 @@ address's sessions are left behind, inaccessible from the new one.
 
 ## The `wallet_getSnaps` fix
 
-If you're pulling `lib/wallet/` into another project: this app never
-calls genlayer-js's `client.connect()`. That method's own signature
-(`connect(network?, snapSource?)`) shows it's wired into MetaMask
-*Snaps* — a different thing entirely from EIP-1193/EIP-3326 network
-switching — and a wallet that never enabled Snaps (most plain MetaMask
-installs, and every non-MetaMask wallet like OKX) has no handler for
-the resulting `wallet_getSnaps` call, so it rejects it right when the
-user tries to sign. `lib/wallet/connectChain.ts` does the chain
-check/switch itself instead, with only `eth_chainId`,
+`lib/genlayer.ts#ensureCorrectNetwork` tries genlayer-js's
+`client.connect(network)` first — that's the officially documented way
+to get a wallet onto the right chain per GenLayer's own docs. But
+`connect()`'s own signature (`connect(network?, snapSource?)`) shows
+it's wired into MetaMask *Snaps*, and a wallet that never enabled Snaps
+(most plain MetaMask installs, and every non-MetaMask wallet like OKX
+or Rabby) has no handler for the resulting `wallet_getSnaps` call —
+`connect()` throws, right when the user tries to sign. The fix isn't to
+avoid `connect()` entirely; it's to catch that failure and fall back to
+the plain, wallet-agnostic standards: `eth_chainId`,
 `wallet_switchEthereumChain` (EIP-3326), and `wallet_addEthereumChain`
-(EIP-3085) as a fallback — then builds the genlayer-js client from just
-the address, the officially supported "let the injected wallet handle
-signing" mode.
+(EIP-3085) if the chain isn't already registered. Real MetaMask users
+get the documented fast path; everyone else gets the fallback,
+automatically.
+
+## Only lowercase the wallet address — leave the contract address alone
+
+Two different address fields, two different rules, learned the hard
+way:
+
+- **The wallet (sender) address IS lowercased**, in
+  `lib/genlayer.ts` (`normalizeAddress`, used inside `getWriteClient`)
+  and in `lib/useWallet.ts` wherever an address comes back from a
+  wallet event (`accountsChanged`, the silent-reconnect `eth_accounts`
+  check on mount). Wallets return this in inconsistent casing, and the
+  Studio RPC has been observed rejecting some checksummed variants here
+  with `"Missing or invalid parameters"`.
+- **`CONTRACT_ADDRESS` is deliberately left exactly as printed by
+  `genlayer deploy`**, in `lib/genlayer.ts` — no `.toLowerCase()`, not
+  even a template-literal type annotation on it. This app shipped with
+  the contract address lowercased for a while too, on the assumption
+  that the same rule applied to both fields. It doesn't: lowercasing it
+  made every read fail with `"Contract <address> not found"` against a
+  contract confirmed live and finalized on the Explorer, because the
+  node looks up deployed contract state by the exact address string,
+  stored in whatever casing it had at deploy time (checksummed). Don't
+  hand-edit the casing of `NEXT_PUBLIC_CONTRACT_ADDRESS` in
+  `.env.local` either — paste it exactly as the CLI printed it.
+
+If you add a new call site, remember these aren't the same rule
+
+applied twice — check which field you're touching.
+
+## Wait for ACCEPTED, not FINALIZED — and don't force reads to FINALIZED either
+
+GenLayer's transaction lifecycle runs Pending → Proposing → Committing
+→ Revealing → **Accepted** → **Finalized**. Validator consensus is
+already real and settled at Accepted; Finalized is an extra
+confirmation-depth guarantee on top of that (an appeal window has to
+pass). Two places in this app care about that distinction:
+
+- **`waitForTransactionReceipt` waits for `TransactionStatus.ACCEPTED`**,
+  not `FINALIZED` — matching the browser-wallet example in GenLayer's
+  own docs. Waiting for Finalized here made writes look like they'd
+  hung even though the transaction had already gone through.
+- **Reads use genlayer-js's default `transactionHashVariant`
+  (`LATEST_NONFINAL`) — don't override it to `LATEST_FINAL`.** That
+  looks like the "safer, more settled" choice, but it isn't: a
+  contract whose only transaction so far is its own deploy sits at
+  Accepted for a real stretch of time before Finalizing. Forcing reads
+  to require Finalized state during that window makes a genuinely live,
+  working contract return a bare `"Contract <address> not found"` —
+  which is exactly the bug this app shipped with for a while, traced
+  and reverted after comparing against a known-working reference
+  project's `lib/contract.ts`. If a read fails right after a fresh
+  deploy even though the Explorer confirms the deploy transaction
+  exists, this — not a wrong address or a network reset — is the first
+  thing to suspect.
+
+## Disconnecting has to persist across a reload
+
+MetaMask (and most injected wallets) have no real "disconnect" RPC
+method — `eth_accounts` will happily keep returning the account after
+the user disconnects from this app's UI, which would otherwise make
+the silent `eth_accounts` check `lib/useWallet.ts` runs on mount undo
+the user's choice on the very next refresh. `disconnect()` sets an
+explicit `confluence:wallet-disconnected` flag in `localStorage`, and
+that mount effect checks the flag first — the wallet's own state is
+never trusted as the source of truth for whether the user wants to be
+connected.
 
 ## Testing
 
@@ -255,7 +340,25 @@ correctness gate.
 - **Read-only views return plain dicts** (`get_session`,
   `get_session_contributions`, ...) rather than raw dataclass/storage
   references, so the frontend can consume them directly without
-  touching storage internals.
+  touching storage internals — `lib/contract.ts` converts each dict's
+  snake_case keys to a camelCase `Session`/`Contribution` type at the
+  boundary, once, rather than every component reaching for
+  `session.funding_amount` by hand.
+- **`useWallet()` is a plain hook, not a context provider** — every
+  component that needs the wallet (`ConnectButton`, `CreateSessionForm`,
+  `ContributeForm`, `SessionActions`, the session detail page) calls it
+  independently. Each instance converges to the same `eth_accounts`
+  state on its own; there's no shared provider to keep in sync, and one
+  fewer layer where wallet state can go stale relative to what the
+  browser extension actually reports.
+- **Writes retry on transient RPC failure, reads don't** — Studionet is
+  a shared, rate-limited RPC; `eth_gasPrice`/`eth_estimateGas` inside
+  `writeContract` have been observed getting dropped independent of
+  whether the write itself would have gone through.
+  `writeContractWithRetry` in `lib/contract.ts` retries up to 3 times
+  with backoff, but only for errors that look transient (network/rate
+  limit) — a real revert or a rejected signature fails immediately,
+  since retrying those would just waste the user's time.
 - **One contribution per address blocks trivial self-dilution, not
   real Sybil resistance** — an address is free, so someone determined
   to inflate their own share with multiple wallets still can. A future

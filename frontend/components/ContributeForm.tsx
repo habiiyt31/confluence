@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useWallet } from "@/lib/wallet/WalletProvider";
-import { submitContribution } from "@/lib/genlayer/contract";
+import { useWallet } from "@/lib/useWallet";
+import { submitContribution } from "@/lib/contract";
 
 export function ContributeForm({
   sessionId,
@@ -11,7 +11,7 @@ export function ContributeForm({
   sessionId: number;
   onSubmitted: () => void;
 }) {
-  const { client, address, reverifyChain } = useWallet();
+  const { address } = useWallet();
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,12 +21,11 @@ export function ContributeForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!client || !canSubmit) return;
+    if (!address || !canSubmit) return;
     setSubmitting(true);
     setError(null);
     try {
-      await reverifyChain();
-      await submitContribution(client, sessionId, text.trim());
+      await submitContribution(address, sessionId, text.trim());
       setText("");
       onSubmitted();
     } catch (err) {

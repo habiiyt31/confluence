@@ -1,5 +1,5 @@
 import { formatEther, parseEther } from "viem";
-import type { SessionStatus } from "./genlayer/contract";
+import type { SessionStatus } from "./contract";
 
 export function formatGEN(wei: string | bigint, maxDecimals = 4): string {
   const value = typeof wei === "string" ? BigInt(wei) : wei;
@@ -47,18 +47,18 @@ export const STATUS_DOT: Record<SessionStatus, string> = {
  * so the bar reads consistently as you scroll and reload.
  */
 export const ATTRIBUTION_PALETTE = [
-  "#7C6CF0", // synth violet
+  "#2BA893", // confluence teal (brand)
   "#E8B34C", // reward gold
-  "#4ADE80", // good green
-  "#4CC9E8", // cyan
-  "#F0654C", // bad coral (used sparingly, still legible)
-  "#C084FC", // light purple
-  "#F0A15C", // amber
-  "#5CE8C0", // mint
-  "#F06CA8", // pink
-  "#8FA3F0", // periwinkle
-  "#E8E05C", // yellow
-  "#A3E85C", // lime
+  "#C97B6B", // muted coral
+  "#6E93A6", // dusty blue
+  "#7FA37A", // sage
+  "#C9A227", // ochre
+  "#8B7BB0", // muted plum
+  "#4CA6C9", // cyan
+  "#B0708F", // dusty rose
+  "#9BAF5C", // olive
+  "#C98F5C", // clay
+  "#5C9B8A", // deep teal
 ];
 
 export function colorForIndex(i: number): string {

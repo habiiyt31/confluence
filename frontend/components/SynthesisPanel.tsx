@@ -1,12 +1,12 @@
 import { AttributionBar } from "./AttributionBar";
-import type { ContributionDTO, SessionDTO } from "@/lib/genlayer/contract";
+import type { Contribution, Session } from "@/lib/contract";
 
 export function SynthesisPanel({
   session,
   contributions,
 }: {
-  session: SessionDTO;
-  contributions: ContributionDTO[];
+  session: Session;
+  contributions: Contribution[];
 }) {
   return (
     <div className="space-y-4">
@@ -15,10 +15,10 @@ export function SynthesisPanel({
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-paper">
           {session.synthesis}
         </p>
-        {session.synthesis_reasoning && (
+        {session.synthesisReasoning && (
           <p className="mt-4 border-t border-synth/20 pt-3 text-xs leading-relaxed text-paper-muted">
             <span className="font-medium text-paper-muted">Attribution reasoning: </span>
-            {session.synthesis_reasoning}
+            {session.synthesisReasoning}
           </p>
         )}
       </div>

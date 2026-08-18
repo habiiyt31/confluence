@@ -7,18 +7,16 @@
     @apply border-ink-border;
   }
   body {
-    background-image: radial-gradient(
-      circle at 12% -10%,
-      rgba(124, 108, 240, 0.10),
-      transparent 42%
-    );
-    background-attachment: fixed;
+    /* Flat, confident ink — no glow. The one illustrated moment in this
+       app is the ConfluenceHero line-art on the homepage, not a corner
+       gradient. */
+    background-color: theme("colors.ink.DEFAULT");
   }
   ::selection {
-    background: rgba(124, 108, 240, 0.35);
+    background: rgba(43, 168, 147, 0.35);
   }
   :focus-visible {
-    outline: 2px solid #7c6cf0;
+    outline: 2px solid #2ba893;
     outline-offset: 2px;
   }
 }
@@ -28,31 +26,34 @@
     @apply rounded-card border border-ink-border bg-ink-surface p-5 sm:p-6;
   }
 
+  /* Ledger-style buttons: a document/contract stamp, not a chat-app pill.
+     Small-caps letter-spacing reinforces the "formal instrument" feel
+     that fits an attribution ledger. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40;
   }
   .btn-primary {
-    @apply btn bg-synth text-white hover:bg-synth/90;
+    @apply btn border-synth bg-synth text-ink hover:bg-synth/90;
   }
   .btn-secondary {
-    @apply btn border border-ink-border bg-ink-raised text-paper hover:border-paper-faint;
+    @apply btn border-ink-border bg-ink-raised text-paper hover:border-paper-faint;
   }
   .btn-ghost {
-    @apply btn text-paper-muted hover:text-paper;
+    @apply btn border-transparent text-paper-muted hover:text-paper;
   }
 
   .field-label {
     @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-paper-muted;
   }
   .field-input {
-    @apply w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-sm text-paper placeholder:text-paper-faint focus:border-synth focus:outline-none;
+    @apply w-full rounded-md border border-ink-border bg-ink px-3.5 py-2.5 text-sm text-paper placeholder:text-paper-faint focus:border-synth focus:outline-none;
   }
   .field-textarea {
     @apply field-input min-h-[110px] resize-y;
   }
 
   .pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-ink-border bg-ink-raised px-2.5 py-1 text-xs text-paper-muted;
+    @apply inline-flex items-center gap-1.5 rounded-md border border-ink-border bg-ink-raised px-2.5 py-1 text-xs text-paper-muted;
   }
 }
 

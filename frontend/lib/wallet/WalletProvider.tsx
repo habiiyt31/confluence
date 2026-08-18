@@ -41,6 +41,12 @@ interface WalletState {
 const WalletContext = createContext<WalletState | null>(null);
 
 const LAST_WALLET_KEY = "confluence.lastWalletRdns";
+// MetaMask (and most wallets) have no real "disconnect" RPC method --
+// eth_accounts still happily returns the account after a UI disconnect,
+// which would make our silent-reconnect-on-load effect immediately
+// undo the user's choice on the next refresh. Track the choice
+// ourselves instead of trusting the wallet.
+const EXPLICITLY_DISCONNECTED_KEY = "confluence.walletDisconnected";
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>("disconnected");
@@ -84,7 +90,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           clientRef.current = null;
           return;
         }
-        const next = accounts[0] as `0x${string}`;
+        const next = (accounts[0] as string).toLowerCase() as `0x${string}`;
         setAddress(next);
         buildClient(next);
       };
@@ -150,6 +156,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (detail?.info.rdns) {
           try {
             window.localStorage.setItem(LAST_WALLET_KEY, detail.info.rdns);
+            window.localStorage.removeItem(EXPLICITLY_DISCONNECTED_KEY);
           } catch {
             // localStorage may be unavailable (private browsing) — non-fatal
           }
@@ -170,14 +177,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     clientRef.current = null;
     providerRef.current = null;
+    try {
+      window.localStorage.setItem(EXPLICITLY_DISCONNECTED_KEY, "1");
+    } catch {
+      // localStorage may be unavailable (private browsing) — non-fatal,
+      // just means this session won't remember the disconnect choice.
+    }
   }, []);
 
-  // Best-effort silent reconnect to the last-used wallet on load.
+  // Best-effort silent reconnect to the last-used wallet on load —
+  // skipped entirely if the user explicitly disconnected last time.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       let lastRdns: string | null = null;
       try {
+        if (window.localStorage.getItem(EXPLICITLY_DISCONNECTED_KEY) === "1") return;
         lastRdns = window.localStorage.getItem(LAST_WALLET_KEY);
       } catch {
         return;
@@ -196,11 +211,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         })) as string[];
         if (cancelled || !accounts?.length) return;
 
+        const addr = accounts[0].toLowerCase() as `0x${string}`;
         providerRef.current = match.provider;
         attachProviderListeners(match.provider);
-        setAddress(accounts[0] as `0x${string}`);
+        setAddress(addr);
         setActiveWalletName(match.info.name);
-        buildClient(accounts[0] as `0x${string}`);
+        buildClient(addr);
         setStatus("connected");
       } catch {
         // silent — user can connect manually

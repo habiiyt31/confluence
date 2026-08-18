@@ -1,0 +1,12 @@
+{
+  "name": "confluence",
+  "version": "1.0.0",
+  "description": "Confluence — a GenLayer Intelligent Contract for collective idea synthesis and contribution-weighted reward distribution",
+  "private": true,
+  "scripts": {
+    "network": "genlayer network",
+    "lint": "genvm-lint check contracts/confluence.py",
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build"
+  }
+}

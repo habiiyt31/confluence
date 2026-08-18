@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useWallet } from "@/lib/wallet/WalletProvider";
-import { createSession } from "@/lib/genlayer/contract";
+import { useWallet } from "@/lib/useWallet";
+import { createSession } from "@/lib/contract";
 import { genToWei } from "@/lib/format";
 
 export function CreateSessionForm({ onClose }: { onClose: () => void }) {
-  const { client, address, reverifyChain } = useWallet();
+  const { address } = useWallet();
   const [brief, setBrief] = useState("");
   const [windowDays, setWindowDays] = useState("7");
   const [minContributions, setMinContributions] = useState("3");
@@ -25,12 +25,11 @@ export function CreateSessionForm({ onClose }: { onClose: () => void }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!client || !canSubmit) return;
+    if (!address || !canSubmit) return;
     setSubmitting(true);
     setError(null);
     try {
-      await reverifyChain();
-      await createSession(client, {
+      await createSession(address, {
         brief: brief.trim(),
         contributionWindowDays: Number(windowDays),
         minContributions: Number(minContributions),

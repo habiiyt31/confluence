@@ -1,7 +1,7 @@
 import { truncateAddress, colorForIndex } from "@/lib/format";
-import type { ContributionDTO } from "@/lib/genlayer/contract";
+import type { Contribution } from "@/lib/contract";
 
-export function ContributionsList({ contributions }: { contributions: ContributionDTO[] }) {
+export function ContributionsList({ contributions }: { contributions: Contribution[] }) {
   if (contributions.length === 0) {
     return (
       <div className="card text-center text-sm text-paper-muted">

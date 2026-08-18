@@ -3,23 +3,28 @@
 import { useEffect, useState, useCallback } from "react";
 import { SessionCard } from "@/components/SessionCard";
 import { CreateSessionForm } from "@/components/CreateSessionForm";
-import { getSessions } from "@/lib/genlayer/contract";
-import type { SessionDTO } from "@/lib/genlayer/contract";
+import { ConfluenceHero } from "@/components/ConfluenceHero";
+import { getSessions } from "@/lib/contract";
+import type { Session } from "@/lib/contract";
 
 const PAGE_SIZE = 20;
 
 export default function HomePage() {
-  const [sessions, setSessions] = useState<SessionDTO[] | null>(null);
+  const [sessions, setSessions] = useState<Session[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await getSessions(0, PAGE_SIZE);
       setSessions(data);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load sessions");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -29,9 +34,11 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6">
+      <ConfluenceHero />
+
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-paper sm:text-3xl">
+          <h1 className="font-display text-2xl font-semibold italic text-paper sm:text-3xl">
             Open briefs
           </h1>
           <p className="mt-1 text-sm text-paper-muted">
@@ -55,9 +62,12 @@ export default function HomePage() {
       )}
 
       {error && (
-        <p className="card border-bad/30 bg-bad/10 text-sm text-bad">
-          {error}
-        </p>
+        <div className="card flex items-center justify-between gap-3 border-bad/30 bg-bad/10">
+          <p className="text-sm text-bad">{error}</p>
+          <button onClick={load} disabled={loading} className="btn-secondary shrink-0">
+            {loading ? "Retrying…" : "Try again"}
+          </button>
+        </div>
       )}
 
       {!sessions && !error && (

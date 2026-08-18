@@ -1,5 +1,5 @@
 import { STATUS_LABEL, STATUS_DOT } from "@/lib/format";
-import type { SessionStatus } from "@/lib/genlayer/contract";
+import type { SessionStatus } from "@/lib/contract";
 
 export function StatusBadge({ status }: { status: SessionStatus }) {
   return (

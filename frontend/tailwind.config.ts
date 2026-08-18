@@ -6,26 +6,26 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          DEFAULT: "#0B0D10",
-          surface: "#14171C",
-          raised: "#191D23",
-          border: "#262B33",
+          DEFAULT: "#0A0F0E",
+          surface: "#121917",
+          raised: "#161F1C",
+          border: "#223029",
         },
         paper: {
-          DEFAULT: "#E8E6E1",
-          muted: "#8B8F98",
-          faint: "#5C616B",
+          DEFAULT: "#EDEAE2",
+          muted: "#93998F",
+          faint: "#5C6259",
         },
         synth: {
-          DEFAULT: "#7C6CF0",
-          soft: "#7C6CF022",
+          DEFAULT: "#2BA893",
+          soft: "#2BA89322",
         },
         reward: {
           DEFAULT: "#E8B34C",
           soft: "#E8B34C22",
         },
-        good: "#4ADE80",
-        bad: "#F0654C",
+        good: "#7FD858",
+        bad: "#E8654C",
       },
       fontFamily: {
         display: ["var(--font-display)", "sans-serif"],

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { StatusBadge } from "./StatusBadge";
 import { formatGEN, daysRemaining } from "@/lib/format";
-import { currentDay } from "@/lib/genlayer/contract";
-import type { SessionDTO } from "@/lib/genlayer/contract";
+import { currentDay } from "@/lib/contract";
+import type { Session } from "@/lib/contract";
 
-export function SessionCard({ session }: { session: SessionDTO }) {
+export function SessionCard({ session }: { session: Session }) {
   const remaining = daysRemaining(
-    session.created_at_day,
-    session.contribution_window_days,
+    session.createdAtDay,
+    session.contributionWindowDays,
     currentDay()
   );
 
@@ -25,12 +25,12 @@ export function SessionCard({ session }: { session: SessionDTO }) {
 
       <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-paper-muted">
         <span>
-          <span className="font-mono text-reward">{formatGEN(session.funding_amount)} GEN</span>{" "}
+          <span className="font-mono text-reward">{formatGEN(session.fundingAmount)} GEN</span>{" "}
           pool
         </span>
         <span>
           <span className="font-mono text-paper">
-            {session.contribution_count}/{session.min_contributions}
+            {session.contributionCount}/{session.minContributions}
           </span>{" "}
           contributions
         </span>

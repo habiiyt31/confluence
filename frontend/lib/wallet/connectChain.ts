@@ -91,7 +91,9 @@ export async function ensureCorrectChain(provider: EIP1193Provider): Promise<voi
   }
 }
 
-/** Requests account access and returns the first (active) address. */
+/** Requests account access and returns the first (active) address,
+ *  normalized to lowercase — see chains.ts#CONTRACT_ADDRESS for why the
+ *  GenLayer Studio RPC needs that, not just checksum-valid hex. */
 export async function requestAccount(provider: EIP1193Provider): Promise<`0x${string}`> {
   const accounts = (await provider.request({
     method: "eth_requestAccounts",
@@ -99,5 +101,5 @@ export async function requestAccount(provider: EIP1193Provider): Promise<`0x${st
   if (!accounts?.[0]) {
     throw new Error("No account returned by wallet");
   }
-  return accounts[0] as `0x${string}`;
+  return accounts[0].toLowerCase() as `0x${string}`;
 }
