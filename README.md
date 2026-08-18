@@ -126,32 +126,45 @@ confluence/
 
 ## Networks
 
-Configured for Studionet by default (hosted, no local setup):
+Configured for **Testnet Bradbury** by default — production-like, real
+AI/LLM validator workloads, persistent state:
 
 | Setting | Value |
 |---|---|
-| GenLayer RPC | `https://studio.genlayer.com/api` |
-| Chain ID | `61999` |
+| GenLayer RPC | `https://rpc-bradbury.genlayer.com` |
+| GenLayer Chain RPC | `https://rpc.testnet-chain.genlayer.com` |
+| Chain ID | `4221` |
 | Currency | GEN |
-| Explorer | `explorer-studio.genlayer.com` |
-| Faucet | Built-in 💧 button in Studio's account selector |
+| Explorer | `explorer-bradbury.genlayer.com` |
+| Chain Explorer | `explorer.testnet-chain.genlayer.com` |
+| Faucet | `testnet-faucet.genlayer.foundation` |
 
-`frontend/lib/genlayer/chains.ts` also ships `localnet`, `testnetAsimov`,
-and `testnetBradbury` (both testnets share chain ID `4221` — same
-underlying rollup, different RPC endpoints). Switch by setting
-`NEXT_PUBLIC_GENLAYER_NETWORK` in `.env.local`; every chain ID and RPC
-URL there is pulled straight from the `genlayer-js` package itself,
-not hand-typed.
+`frontend/lib/genlayer.ts` also ships `studionet`, `localnet`, and
+`testnetAsimov` (Asimov shares Bradbury's chain ID `4221` — same
+underlying rollup, different RPC endpoint). Switch by setting
+`NEXT_PUBLIC_GENLAYER_NETWORK` in `.env.local`.
 
-**Studionet's state is temporary, not persistent** — per GenLayer's own
-network comparison, Studionet resets periodically (Bradbury and Asimov
-don't). If reads that used to work suddenly all fail with a generic
-`"Missing or invalid parameters"` RPC error even though
-`NEXT_PUBLIC_CONTRACT_ADDRESS` is a well-formed address, that's almost
-always Studionet having reset since you deployed — the address is
-valid, there's just no contract code left at it anymore. Redeploy and
-paste the fresh address; if you want an address that survives across
-sessions, deploy to Bradbury or Asimov instead.
+**Why Bradbury instead of Studionet, if you're deploying the frontend
+anywhere other than localhost:** Studionet is explicitly documented as
+a *hosted development environment* with **temporary** state, meant for
+local iteration — not a backing service for a publicly deployed app.
+Two symptoms trace back to this:
+
+- Studionet's state resets periodically. A contract address that
+  worked yesterday can come back `"Contract <address> not found"`
+  today with no code change — there's just no contract left at that
+  address anymore.
+- Studionet's RPC has been observed intermittently failing outright
+  (`"Failed to fetch"`) under sustained request volume, independent of
+  anything wrong with the request. Consistent with a shared sandbox
+  RPC not provisioned for production-style traffic.
+
+Bradbury doesn't reset and is explicitly the network GenLayer's own
+docs recommend once you're ready for anything more than local
+iteration (their own "Recommended Flow": Studionet → Localnet →
+Bradbury). If you're only ever running this on `localhost` for your
+own local development, Studionet is still fine and faster to iterate
+on — just don't point a publicly deployed frontend at it.
 
 ## Setup
 
@@ -164,7 +177,9 @@ py -3.12 -m pip install genvm-linter
 cd frontend && npm install && cd ..
 
 # 3. Network
-npm run network   # choose studionet (fund via the 💧 faucet)
+npm run network   # choose testnetBradbury
+# fund your wallet via testnet-faucet.genlayer.foundation (not the
+# same GEN pool as Studionet's built-in faucet)
 
 # 4. Lint — non-upgradable, so this matters more than usual
 npm run lint
@@ -351,14 +366,19 @@ correctness gate.
   state on its own; there's no shared provider to keep in sync, and one
   fewer layer where wallet state can go stale relative to what the
   browser extension actually reports.
-- **Writes retry on transient RPC failure, reads don't** — Studionet is
-  a shared, rate-limited RPC; `eth_gasPrice`/`eth_estimateGas` inside
-  `writeContract` have been observed getting dropped independent of
-  whether the write itself would have gone through.
-  `writeContractWithRetry` in `lib/contract.ts` retries up to 3 times
-  with backoff, but only for errors that look transient (network/rate
-  limit) — a real revert or a rejected signature fails immediately,
-  since retrying those would just waste the user's time.
+- **Both writes and reads retry on transient RPC failure** —
+  Studionet and, to a lesser extent, the testnets are shared RPCs;
+  `eth_gasPrice`/`eth_estimateGas` inside `writeContract`, and plain
+  reads under sustained load, have both been observed failing outright
+  (`"Failed to fetch"`) independent of whether the request itself was
+  valid. `writeContractWithRetry` and `withReadRetry` in
+  `lib/contract.ts` retry with backoff, but only for errors that look
+  transient (network/rate limit/timeout) — a real revert or a rejected
+  signature fails immediately, since retrying those would just waste
+  the user's time. There's also a short deliberate pause after a write
+  is accepted, before the UI refreshes — firing reads at the RPC in
+  the same instant `waitForTransactionReceipt`'s polling stops is
+  exactly when it's least likely to have room to spare.
 - **One contribution per address blocks trivial self-dilution, not
   real Sybil resistance** — an address is free, so someone determined
   to inflate their own share with multiple wallets still can. A future
@@ -377,7 +397,9 @@ non-default setting:
 3. In **Project Settings → Environment Variables**, add the same
    values `frontend/.env.example` documents (`.env.local` itself is
    gitignored and never reaches Vercel):
-   - `NEXT_PUBLIC_GENLAYER_NETWORK` = `studionet` (or a testnet)
+   - `NEXT_PUBLIC_GENLAYER_NETWORK` = `testnetBradbury` (recommended
+     for anything public-facing — see **Networks** above for why
+     Studionet specifically isn't a good fit here)
    - `NEXT_PUBLIC_CONTRACT_ADDRESS` = the address from your own
      `genlayer deploy` — Vercel only serves the frontend, it doesn't
      deploy the contract.

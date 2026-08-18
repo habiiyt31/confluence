@@ -1,7 +1,7 @@
 import { createClient } from "genlayer-js";
 import { localnet, studionet, testnetAsimov, testnetBradbury } from "genlayer-js/chains";
 
-const NETWORK = process.env.NEXT_PUBLIC_GENLAYER_NETWORK ?? "studionet";
+const NETWORK = process.env.NEXT_PUBLIC_GENLAYER_NETWORK ?? "testnetBradbury";
 
 // No explicit return type here on purpose: genlayer-js/chains doesn't
 // export a public "GenLayerChain" type to annotate this with, and
@@ -51,10 +51,10 @@ export function getReadClient() {
  * Normalizes a wallet-supplied address before it's ever sent to the
  * RPC. Different wallets return `eth_accounts`/`eth_requestAccounts`
  * results in different casing (lowercase, or EIP-55 checksummed), and
- * the GenLayer Studio RPC has been observed rejecting some of those
- * variants with "Invalid params: Incorrect address format" (a
- * server-side -32602 error, not a viem client-side check). Lowercase
- * hex is universally accepted by Ethereum-style JSON-RPC servers, so
+ * GenLayer's RPC has been observed rejecting some of those variants
+ * with "Invalid params: Incorrect address format" (a server-side
+ * -32602 error, not a viem client-side check). Lowercase hex is
+ * universally accepted by Ethereum-style JSON-RPC servers, so
  * normalizing to it here removes the wallet/browser-dependent variance.
  * This is specific to the wallet/sender address -- see CONTRACT_ADDRESS
  * above for why the contract address must NOT get the same treatment.
