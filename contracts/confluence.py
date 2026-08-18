@@ -390,8 +390,19 @@ Respond ONLY as compact JSON, no markdown fences, exactly:
   "attribution_bps": {{"0": <int>, "1": <int>, ...}},
   "reasoning": "<short explanation of the weighting>"}}
 """
-            raw = gl.nondet.exec_prompt(prompt, response_format="json")
-            data = json.loads(raw)
+            # gl.nondet.exec_prompt(..., response_format="json") already
+            # returns a parsed dict, not a JSON string -- per the SDK's
+            # own type signature (-> dict[str, Any]). Calling json.loads()
+            # on an already-parsed dict crashes with exactly:
+            #   TypeError: the JSON object must be str, bytes or
+            #   bytearray, not dict
+            # which is a real error this contract shipped with and hit on
+            # a live deploy. Use the dict directly; keep a defensive
+            # fallback in case a future SDK version reverts to returning
+            # a raw string.
+            data = gl.nondet.exec_prompt(prompt, response_format="json")
+            if not isinstance(data, dict):
+                data = json.loads(data)
             attribution_raw = data.get("attribution_bps", {})
             normalized_attribution = {
                 str(k): int(v) for k, v in attribution_raw.items()
