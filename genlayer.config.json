@@ -31,5 +31,5 @@
       "faucet": "https://testnet-faucet.genlayer.foundation"
     }
   },
-  "defaultNetwork": "testnetBradbury"
+  "defaultNetwork": "studionet"
 }

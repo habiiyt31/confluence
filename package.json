@@ -6,6 +6,8 @@
   "scripts": {
     "network": "genlayer network",
     "lint": "genvm-lint check contracts/confluence.py",
+    "test:direct": "python3 -m pytest tests/direct/ -v",
+    "test:integration": "gltest --network localnet",
     "dev": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build"
   }

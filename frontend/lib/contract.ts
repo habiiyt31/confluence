@@ -60,7 +60,16 @@ function toContribution(raw: Record<string, unknown>): Contribution {
   };
 }
 
-/** Days since the Unix epoch — the contract works in whole days, not timestamps. */
+/**
+ * Days since the Unix epoch — used only for this app's own UI display
+ * (countdown text, whether to show the "Run synthesis" button yet).
+ * NOT sent to the contract anymore: the contract derives "today" from
+ * gl.message.datetime itself, since a caller-supplied day was a real
+ * vulnerability (see contracts/confluence.py). This local value can
+ * legitimately drift a little from the contract's own notion of "today"
+ * near a UTC day boundary -- that's fine, it only affects when a button
+ * appears, never what the contract actually enforces.
+ */
 export function currentDay(): number {
   return Math.floor(Date.now() / 86_400_000);
 }
@@ -268,10 +277,13 @@ export async function createSession(
     fundingWei: bigint;
   }
 ) {
+  // No current_day argument -- the contract derives "today" itself
+  // from gl.message.datetime now, not from caller input. See
+  // contracts/confluence.py's "TRUSTWORTHY TIME" docstring section.
   return writeAndWait(
     walletAddress,
     "create_session",
-    [params.brief, params.contributionWindowDays, params.minContributions, currentDay()],
+    [params.brief, params.contributionWindowDays, params.minContributions],
     params.fundingWei
   );
 }
@@ -281,11 +293,11 @@ export async function submitContribution(
   sessionId: number,
   text: string
 ) {
-  return writeAndWait(walletAddress, "submit_contribution", [sessionId, text, currentDay()]);
+  return writeAndWait(walletAddress, "submit_contribution", [sessionId, text]);
 }
 
 export async function synthesize(walletAddress: `0x${string}`, sessionId: number) {
-  return writeAndWait(walletAddress, "synthesize", [sessionId, currentDay()]);
+  return writeAndWait(walletAddress, "synthesize", [sessionId]);
 }
 
 export async function requestResynthesis(walletAddress: `0x${string}`, sessionId: number) {

@@ -1,7 +1,7 @@
 import { createClient } from "genlayer-js";
 import { localnet, studionet, testnetAsimov, testnetBradbury } from "genlayer-js/chains";
 
-const NETWORK = process.env.NEXT_PUBLIC_GENLAYER_NETWORK ?? "testnetBradbury";
+const NETWORK = process.env.NEXT_PUBLIC_GENLAYER_NETWORK ?? "studionet";
 
 // No explicit return type here on purpose: genlayer-js/chains doesn't
 // export a public "GenLayerChain" type to annotate this with, and
